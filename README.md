@@ -1,1 +1,1 @@
-# amplicon_data_analysis
+# Computational and statistical methods to analyse microbial amplicon sequencing data
