@@ -4,5 +4,5 @@ This repository provides all data and required tools used in chapter 'Computatio
 
 ## Required tools
 1. Amplicon data analysis tools
-  * OTU based approach - QIIME1 (Quantitative Insights Into Microbial Ecology)
+ * QIIME1 (Quantitative Insights Into Microbial Ecology) - This is open-source OTU based approach for microbial data analysis pipeline
 
