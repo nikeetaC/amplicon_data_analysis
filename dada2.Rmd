@@ -1,0 +1,169 @@
+---
+title: "DADA2 tutorial using MiSeq SOP data"
+author: "Dattatray S. Mongad"
+date: "22/04/2020"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+DADA2 pipeline tutorial is availbale at <https://benjjneb.github.io/dada2/tutorial.html>, following tutorial will use same data and give more insights to each and every steps. DADA2 assumes that all samples have been demultiplexed, non-biological sequences have been removed (this can be done in filtering step) and if your data is paired end it should follow naming style as "SampleID_R1.fastq" and "SampleID_R2.fastq" for forward and reverse reads. DADA2 is built in R hence, some basic knowledge of R is must to understand the following tutorial.
+
+1. Preparation of data
+
+```{r datapreparation}
+# Check/install and load dada2 package
+if(!requireNamespace("dada2",quietly = T)){
+  if(!requireNamespace("BiocManager",quietly = T)){
+    install.packages("BiocManager")
+  }
+  BiocManager::install('dada2',version = '1.14.1')
+}
+library(dada2)
+packageVersion('dada2')
+
+# Set working directory. All files generated will be stored at following path
+setwd('/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/dada2/')
+# Store path of sequence data. If forward and reverse reads are at different locations please use pathF and pathR variables at subsequent steps
+path <- '/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/dada2/MiSeq_SOP/'
+
+# MiSeq SOP data filenames have format SAMPLENAME_R1_001.fastq and SAMPLENAME_R2_001.fastq
+# Here we will make two vectors for storing list of absolute paths of forward and reverse files.
+forward.files <- sort(list.files(path, pattern="_R1_001.fastq", full.names = TRUE))
+
+reverse.files <- sort(list.files(path, pattern="_R2_001.fastq", full.names = TRUE))
+
+
+# We can make a vector of sample names by extracting from filenames, assuming filenames have format: SAMPLENAME_XXX.fastq
+sample.names <- sapply(strsplit(basename(forward.files), "_"), `[`, 1)
+```
+
+2. Sequence quality check
+
+```{r qualityinspection}
+plotQualityProfile(forward.files[1:2])
+plotQualityProfile(reverse.files[1:2])
+```
+
+3. Filtering and Trimming
+
+```{r filterNtrim}
+# Create folders to store the filtered reads
+filt.forward <- file.path(path, "filteredF", paste0(sample.names, "_F_filt.fastq.gz"))
+filt.reverse <- file.path(path, "filteredR", paste0(sample.names, "_R_filt.fastq.gz"))
+names(filt.forward) <- sample.names
+names(filt.reverse) <- sample.names
+
+out <- filterAndTrim(forward.files, filt.forward, reverse.files, 
+      filt.reverse, truncLen=c(240,160), maxN=0, maxEE=c(2,2), 
+      truncQ=2, rm.phix=TRUE, compress=TRUE, multithread=TRUE)
+
+head(out)
+```
+
+4. Learning error rates
+
+```{r learnerror_rates}
+errF <- learnErrors(filt.forward, multithread=TRUE)
+errR <- learnErrors(filt.reverse, multithread=TRUE)
+
+# plot error model (here forward plot is shown only)
+plotErrors(errF, nominalQ=TRUE)
+```
+
+5. Sample inference
+
+```{r sampleinference}
+dadaFs <- dada(filt.forward, err=errF, multithread=TRUE)
+
+dadaRs <- dada(filt.reverse, err=errR, multithread=TRUE)
+
+dadaFs[[1]]
+```
+
+6. Merging paired-end reads
+
+```{r merge}
+mergers <- mergePairs(dadaFs, filt.forward, dadaRs, filt.reverse, verbose=TRUE)
+# Inspect the merger data.frame from the first sample
+head(mergers[[1]])
+```
+
+7. Construct sequence table and remove chimeras
+
+```{r}
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+dim(seqtab.nochim)
+
+sum(seqtab.nochim)/sum(seqtab)
+```
+
+8. Assign taxonomy
+
+``` {r taxonomy}
+taxa <- assignTaxonomy(seqtab.nochim, "/SofVolume/databases/silva_nr_v138_train_set.fa.gz", multithread=TRUE)
+
+taxa <- addSpecies(taxa, "/SofVolume/databases/silva_species_assignment_v138.fa.gz")
+```
+
+9. Build phyloseq object
+
+```{r phyloseq}
+if(!requireNamespace("phyloseq",quietly = T)){
+  if(!requireNamespace("BiocManager",quietly = T)){
+    install.packages("BiocManager")
+  }
+  BiocManager::install('phyloseq',version = '1.30.0')
+}
+library(phyloseq)
+packageVersion('phyloseq')
+
+# read sample metadata
+samdf <- read.table(file = 'map.tsv',header = T,sep = '\t',row.names = 1)
+ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxa))
+# Remove mock sample
+ps <- prune_samples(sample_names(ps) != "Mock", ps) 
+
+# Add ASV sequences in refseq slot
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+ps <- merge_phyloseq(ps, dna)
+ps
+
+# Create phylogenetic tree by aligning ASV sequences
+library(DECIPHER)
+library(phangorn)
+seqs <- getSequences(seqtab)
+names(seqs) <- seqs # This propagates to the tip labels of the tree
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA)
+
+phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phang.align)
+treeNJ <- NJ(dm) # Note, tip order != sequence order
+fit = pml(treeNJ, data=phang.align)
+
+## negative edges length changed to 0!
+
+fitGTR <- update(fit, k=4, inv=0.2)
+fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+                      rearrangement = "stochastic", control = pml.control(trace = 0))
+detach("package:phangorn", unload=TRUE)
+
+# add tree to phyloseq object
+phy_tree(ps) <- fitGTR$tree
+ps
+# change ASV names and save phyloseq object
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+saveRDS(ps,file = 'ps_dada2.rds')
+```
