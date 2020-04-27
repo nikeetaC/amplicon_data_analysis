@@ -1,0 +1,116 @@
+---
+title: "Microbiome analysis"
+author: "Dattatray S. Mongad"
+date: "25/04/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r readPhyloseq}
+setwd('/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/analysis/')
+library(phyloseq)
+# DADA2
+ps.dada2 <- readRDS(file = '../dada2/ps_dada2.rds')
+ps.dada2
+
+# QIIME1
+ps.qiime1 <- readRDS(file = '../qiime1/ps_qiime1.rds')
+ps.qiime1
+```
+
+
+```{r alphaDiversity}
+p1 <- plot_richness(physeq = ps.dada2,x = 'Days',color = 'Time',measures = c('Observed','Chao1','Shannon'))
+print(p1)
+p2 <- plot_richness(physeq = ps.qiime1,x = 'Days',color = 'Time',measures = c('Observed','Chao1','Shannon'))
+print(p2)
+```
+
+
+```{r betadiversity}
+# Transform data to relative proportions
+ps.dada2.prop <- transform_sample_counts(physeq = ps.dada2,function(x) x/sum(x))
+ps.qiime1.prop <- transform_sample_counts(ps.qiime1,function(x) x/sum(x))
+
+# Ordination using bray-curtis distance metric
+ps.dada2.ord <- ordinate(physeq = ps.dada2.prop,method = 'NMDS',distance = 'bray')
+ps.qiime1.ord <- ordinate(physeq = ps.qiime1.prop,method = 'NMDS',distance = 'bray')
+
+# ordination plots
+p1 <- plot_ordination(physeq = ps.dada2.prop,ordination = ps.dada2.ord,color = 'Time')
+print(p1)
+p2 <- plot_ordination(physeq = ps.qiime1.prop,ordination = ps.qiime1.ord,color = 'Time')
+print(p2)
+```
+
+
+``` {r barcharts}
+# Change type of data and levels for Days column in sample metadata
+# This step is just to change the order of Days in sample metadata. If you don't want to change the order, you can skip this step
+sample_data(ps.dada2.prop)$Days <- factor(as.character(sample_data(ps.dada2.prop)$Days),levels = c("0","1","2","3","5","6","7","8","9","141","142","143","144","145","146","147","148","149","150"))
+sample_data(ps.qiime1.prop)$Days <- factor(as.character(sample_data(ps.qiime1.prop)$Days),levels = c("0","1","2","3","5","6","7","8","9","141","142","143","144","145","146","147","148","149","150"))
+
+# plotting abundance of top20 OTUs/ASVs
+library(ggplot2)
+top20 <- names(sort(taxa_sums(ps.dada2.prop),decreasing = T))[1:20]
+ps.dada2.top20 <- prune_taxa(top20,ps.dada2.prop)
+p1 <- plot_bar(physeq = ps.dada2.top20,x = 'Days',fill = 'Family') + facet_wrap(~Time,scales = 'free_x') + geom_bar(stat='identity') + scale_fill_brewer(palette = 'Paired')
+print(p1)
+
+top20 <- names(sort(taxa_sums(ps.qiime1.prop),decreasing = T))[1:20]
+ps.qiime1.top20 <- prune_taxa(top20,ps.qiime1.prop)
+#sample_data(ps.qiime1.top20)$Days <- as.character(sample_data(ps.qiime1.top20)$Days)
+p2 <- plot_bar(physeq = ps.qiime1.top20,x = 'Days',fill = 'Rank5') + facet_wrap(~Time, scales="free_x") + geom_bar(stat = 'identity') + scale_fill_brewer(palette = 'Paired')
+print(p2)
+```
+
+```{r glomGenus}
+# Here we will consolidate the abundances of each OTUs/ASVs at Family level and then plot top10 Families.
+ps.dada2.prop.glom <- tax_glom(ps.dada2.prop,taxrank = 'Family')
+top10 <- names(sort(taxa_sums(ps.dada2.prop.glom),decreasing = T))[1:10]
+ps.dada2.top10 <- prune_taxa(top10,ps.dada2.prop.glom)
+p1 <- plot_bar(physeq = ps.dada2.top10,x = 'Days',fill = 'Family') + facet_wrap(~Time,scales = 'free_x') + geom_bar(stat='identity') + scale_fill_brewer(palette = 'Paired')
+print(p1)
+
+ps.qiime1.prop.glom <- tax_glom(ps.qiime1.prop,taxrank = 'Rank5')
+top10 <- names(sort(taxa_sums(ps.qiime1.prop.glom),decreasing = T))[1:10]
+ps.qiime.top10 <- prune_taxa(top10,ps.qiime1.prop.glom)
+p2 <- plot_bar(physeq = ps.qiime.top10,x = 'Days',fill = 'Rank5') + facet_wrap(~Time,scales = 'free_x') + geom_bar(stat='identity') + scale_fill_brewer(palette = 'Paired')
+print(p2)
+```
+
+```{r differentialAbundant}
+library(ALDEx2)
+# DADA2
+otu.tab <- t(otu_table(ps.dada2))
+conds <- sample_data(ps.dada2)$Time
+# Run aldex function
+x.all <- aldex(reads = otu.tab,conditions = conds)
+x.all <- x.all[x.all$wi.eBH<=0.05,] # filter significant ASVs
+# add taxonomy to result table
+x.all <- merge(x.all,tax_table(ps.dada2),by=0)
+x.all <- x.all[order(x.all$diff.btw,decreasing = T),] # sort table by log2FC
+x.all$Row.names <- factor(x = x.all$Row.names,levels = x.all$Row.names)
+#plot
+p1 <- ggplot(data = x.all,mapping = aes(x = diff.btw,y = Row.names, color=Family)) + geom_point() + xlab('Log2FC') + ylab('ASV')
+print(p1)
+
+# QIIME1
+otu.tab <- otu_table(ps.qiime1)
+conds <- sample_data(ps.qiime1)$Time
+# Run aldex function
+x.all <- aldex(reads = otu.tab,conditions = conds)
+x.all <- x.all[x.all$wi.eBH<=0.05,] # filter significant ASVs
+# add taxonomy to result table
+x.all <- merge(x.all,tax_table(ps.qiime1),by=0)
+x.all <- x.all[order(x.all$diff.btw,decreasing = T),] # sort table by log2FC
+x.all$Row.names <- factor(x = x.all$Row.names,levels = x.all$Row.names)
+#plot
+p2 <- ggplot(data = x.all,mapping = aes(x = diff.btw,y = Row.names, color=Rank5)) + geom_point() + xlab('Log2FC') + ylab('OTU')
+print(p2)
+```

@@ -1,0 +1,45 @@
+---
+title: "QIIME importing BIOM in phyloseq"
+author: "Dattatray S. Mongad"
+date: "23/04/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r phyloseq}
+# set working direcotry to store files and RData
+setwd('/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/qiime1/')
+
+# Check/install and load dada2 package
+if(!requireNamespace("phyloseq",quietly = T)){
+  if(!requireNamespace("BiocManager",quietly = T)){
+    install.packages("BiocManager")
+  }
+  BiocManager::install('phyloseq',version = '1.30.0')
+}
+library(phyloseq)
+packageVersion('phyloseq')
+
+# import QIIME1
+ps <- import_biom(BIOMfilename = '/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/qiime1/MiSeq_SOP/closed_ref_otus/otu_table_w_metadata.biom')
+
+# add phylogenetic tree
+phy_tree(ps) <- read_tree(treefile = '/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/qiime1/MiSeq_SOP/closed_ref_otus/97_otus.tree')
+
+# add OTU sequences in phyloseq object
+library(Biostrings)
+seqs <- readDNAStringSet(filepath = '/BioVolume/Dropbox/Book_chapter_microbiome_datta_nikki/data/qiime1/MiSeq_SOP/closed_ref_otus/rep_set/combined_seqs_rep_set.fasta')
+names(seqs) <- gsub(names(seqs),pattern = '\\s.*',replacement = '',perl = T)
+ps <- merge_phyloseq(ps,seqs)
+# print phyloseq object
+ps
+
+# remove Mock sample
+ps <- prune_samples(sample_names(ps) != "Mock", ps)
+
+# save phyloseq object
+saveRDS(ps,file = 'ps_qiime1.rds')
+```
