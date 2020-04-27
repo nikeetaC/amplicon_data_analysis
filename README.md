@@ -22,4 +22,4 @@ OTU based approach works by clustering sequences using percent identity threshol
 within sequences from each cluster. These clusters are known as Operational Taxonomic Units (OTUs) with an assumption that these sequences from same OTUs belongs to same taxa (like same genera). On the other hand,
 ASV based approach using DADA2 or Deblur assume that single nucleotide difference within sequences can give more insights to microbial diversity. Hence, these tool tries to correct the sequencing errors prior
 to partition unique sequences into different ASVs.
-![alt text](/BioVolume/PyCharm/amplicon_data_analysis/img/Fig2.jpeg "Microbiome data analysis approaches")
+![alt text](https://github.com/nikeetaC/amplicon_data_analysis/blob/master/img/Fig2.jpeg "Microbiome data analysis approaches")
