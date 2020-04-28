@@ -1,8 +1,19 @@
-# Microbial amplicon sequencing data analysis
+# Microbiome data analysis
 
-This repository provides all data and required tools used in chapter 'Computational and statistical methods to analyse microbial amplicon sequencing data'
+This repository provides all data and required tools used in chapter 'Computational and statistical methods to analyse microbial amplicon sequencing data'.
 
-## Required tools
+#### Data:
+We have used MiSeq SOP data used in Kozich JJ, Westcott SL, Baxter NT, Highlander SK, Schloss PD. (2013): Development of a dual-index sequencing strategy and curation pipeline for analyzing amplicon sequence data on the MiSeq Illumina sequencing platform. Applied and Environmental Microbiology. 79(17):5112-20. 
+Download the data from http://mothur.org/w/images/d/d6/MiSeqSOPData.zip/
+
+#### Workflows:
+
+The workflows from book chapter have been converted to online documentation. Please use following links:
+1. **QIIME1**: https://microdm.github.io/data_analysis/microbiome/qiime1_workflow.html
+2. **DADA2**: https://microdm.github.io/data_analysis/microbiome/dada2_workflow.html
+3. **Downstream analysis**: https://microdm.github.io/data_analysis/microbiome/downstream_analysis.html
+
+#### Required tools
 1. ##### Amplicon data analysis tools
     * [QIIME1](http://qiime.org/install/install.html) (Quantitative Insights Into Microbial Ecology) - This is open-source OTU based approach for microbial data analysis pipeline
     * [Microbiome helper](https://github.com/LangilleLab/microbiome_helper/wiki) - A repository that contains several resources and scripts to automate microbiome analysis workflows.
